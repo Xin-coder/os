@@ -1,5 +1,4 @@
 #[macro_use]
-pub mod io;
-
-pub mod lang_items;
+pub mod console;
+pub mod panic;
 pub mod sbi;
