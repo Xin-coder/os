@@ -33,10 +33,13 @@ global_asm!(include_str!("boot/entry64.asm"));
 #[no_mangle]
 pub extern "C" fn rust_main() -> ! {
     println!("Hello rCore-Tutorial!");
-
+    //中断初始化
     lib::interrupt::init();
+    //timer初始化
+    lib::timer::init();
     unsafe {
         asm!("ebreak"::::"volatile");
     }
-    panic!("end of rust_main")
+    loop{}
+    //panic!("end of rust_main")
 }

@@ -1,8 +1,18 @@
 use riscv::register::{
-    scause,
+    scause::{
+        self,
+        Trap,
+        Exception,
+        Interrupt
+    },
     sepc,
     stvec,
-    sscratch
+    sscratch,
+    sstatus,
+};
+use super::timer::{
+    TICKS,
+    clock_set_next_event
 };
 use super::context::TrapFrame;
 
@@ -18,6 +28,8 @@ pub fn init() {
         // 我们要把 sscratch 初始化为 0
         sscratch::write(0);
         stvec::write(__alltraps as usize, stvec::TrapMode::Direct);
+        // 设置 sstatus 的 SIE 位
+        sstatus::set_sie();
     }
     println!("++++ setup interrupt! ++++");
 }
@@ -34,14 +46,39 @@ pub fn init() {
 // 在这里进行中断分发及处理
 #[no_mangle]
 pub fn rust_trap(tf: &mut TrapFrame) {
-    println!("rust_trap!");
-    // 触发中断时，硬件会将 sepc 设置为触发中断指令的地址
-    // 而中断处理结束，使用 sret 返回时也会跳转到 sepc 处
-    // 于是我们又要执行一次那条指令，触发中断，无限循环下去
-    // 而我们这里是断点中断，只想这个中断触发一次
-    // 因此我们将中断帧内的 sepc 字段设置为触发中断指令下一条指令的地址，即中断结束后跳过这条语句
-    // 由于 riscv64 的每条指令都是 32 位，4 字节，因此将地址+ 4 即可
-    // 这样在 RESTORE_ALL 时，这个修改后的 sepc 字段就会被 load 到 sepc 寄存器中
-    // 使用 sret 返回时就会跳转到 ebreak 的下一条指令了
-    tf.sepc += 2;
+    //println!("rust_trap!");
+    match tf.scause.cause() {
+        Trap::Exception(Exception::Breakpoint) => breakpoint(&mut tf.sepc),
+        Trap::Interrupt(Interrupt::SupervisorTimer) => super_timer(),
+        _ => undefined_trap(tf)
+    }
+}
+
+fn breakpoint(sepc: &mut usize) {
+    println!("a breakpoint set @0x{:x}", sepc);
+    *sepc += 2;
+}
+
+fn super_timer()->(){
+    // 设置下一次时钟中断触发时间
+    clock_set_next_event();
+    unsafe {
+        // 更新时钟中断触发计数
+        // 注意由于 TICKS 是 static mut 的
+        // 后面会提到，多个线程都能访问这个变量
+        // 如果同时进行 +1 操作，会造成计数错误或更多严重bug
+        // 因此这是 unsafe 的，不过目前先不用管这个
+        TICKS += 1;
+        // 每触发 100 次时钟中断将计数清零并输出
+        if TICKS == 100 {
+            TICKS = 0;
+            println!("* 100 ticks *");
+        }
+    }
+    // 发生外界中断时，epc 指向的指令没有完成执行，因此这里不需要修改 epc
+}
+
+fn undefined_trap(tf: &mut TrapFrame)-> (){
+    println!("{:?}",tf.scause.cause());
+    panic!("Undefined trap!");
 }
