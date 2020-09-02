@@ -1,0 +1,3 @@
+# rcore 实现
+
+本项目参考 https://rcore-os.github.io/rCore_tutorial_doc，从零复现一个rcore操作系统。
