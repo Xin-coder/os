@@ -8,4 +8,5 @@ edition = "2018"
 
 [dependencies]
 riscv = { path = "/home/xin/MyPro/rcore/riscv", features = ["inline-asm"] }
-
+spin = "0.5.2"
+buddy_system_allocator = "0.3"
